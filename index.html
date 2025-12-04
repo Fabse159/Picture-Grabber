@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Bilder-Crawler-Downloader</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #input-area { margin-bottom: 20px; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        #gallery { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .thumbnail { width: 100px; height: 100px; object-fit: cover; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; }
+        .download-btn { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 20px; }
+        .download-btn:hover { background-color: #45a049; }
+        .loading { color: orange; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h2>Bild-Serien-Downloader</h2>
+
+    <div id="input-area">
+        <label for="url-input">Geben Sie einen Beispiellink ein (z.B. mit 008.jpg):</label><br>
+        <input type="text" id="url-input" size="80" value="https://averotica.com/members/content/3334/high/008.jpg"><br><br>
+        <button onclick="startCrawling()">Bilder Suchen</button>
+    </div>
+
+    <div id="status-message"></div>
+    
+    <button id="download-all-btn" class="download-btn" style="display: none;" onclick="downloadAllImages()">
+        Alle Bilder Herunterladen (ZIP)
+    </button>
+    
+    <div id="gallery">
+        </div>
+
+    <script>
+        // ACHTUNG: Die URL muss auf Ihren Backend-Host zeigen, z.B. http://localhost:5000/find_images
+        const BACKEND_URL = 'http://127.0.0.1:5000/find_images';
+        let foundImages = []; // Speichert die gefundenen Bild-URLs
+
+        /**
+         * Startet den Crawling-Prozess durch Aufruf des Python-Backends.
+         */
+        async function startCrawling() {
+            const link = document.getElementById('url-input').value.trim();
+            const statusDiv = document.getElementById('status-message');
+            const galleryDiv = document.getElementById('gallery');
+            const downloadBtn = document.getElementById('download-all-btn');
+            
+            // UI zurücksetzen
+            statusDiv.textContent = 'Suche läuft... Dies kann einige Momente dauern.';
+            statusDiv.className = 'loading';
+            galleryDiv.innerHTML = '';
+            downloadBtn.style.display = 'none';
+            foundImages = [];
+            
+            try {
+                const response = await fetch(BACKEND_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link: link })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.error) {
+                    statusDiv.textContent = 'Fehler: ' + (data.error || 'Unerwarteter Serverfehler.');
+                    statusDiv.className = 'error';
+                    return;
+                }
+
+                foundImages = data.images;
+
+                if (foundImages.length === 0) {
+                    statusDiv.textContent = 'Keine Bilder in der Serie gefunden.';
+                    statusDiv.className = '';
+                    return;
+                }
+
+                statusDiv.textContent = `Erfolg! ${foundImages.length} Bilder gefunden.`;
+                statusDiv.className = '';
+                
+                // Miniaturansichten anzeigen
+                foundImages.forEach(img => {
+                    const imgElement = document.createElement('img');
+                    imgElement.src = img.url;
+                    imgElement.alt = img.filename;
+                    imgElement.className = 'thumbnail';
+                    imgElement.title = img.filename + ' (Klicken zum Öffnen)';
+                    imgElement.onclick = () => window.open(img.url, '_blank');
+                    galleryDiv.appendChild(imgElement);
+                });
+                
+                // Download-Button anzeigen
+                downloadBtn.style.display = 'block';
+
+            } catch (e) {
+                statusDiv.textContent = 'Verbindungsfehler. Ist das Python-Backend gestartet?';
+                statusDiv.className = 'error';
+                console.error('Fetch-Fehler:', e);
+            }
+        }
+
+        /**
+         * Startet den Download aller gefundenen Bilder.
+         * HINWEIS: Ein direkter "Alle Herunterladen"-Button ist in modernen 
+         * Browsern schwierig (Blockierung), daher verwenden wir eine 
+         * ZIP-Lösung oder einen einfachen Schleifen-Download.
+         * Die einfachste Methode ist, eine ZIP-Datei auf dem Server zu erstellen.
+         * Da das zu komplex für dieses Frontend ist, simulieren wir hier einen 
+         * sequenziellen Download im Browser.
+         */
+        async function downloadAllImages() {
+            if (foundImages.length === 0) {
+                alert('Zuerst Bilder suchen!');
+                return;
+            }
+            
+            if (confirm(`Möchten Sie ${foundImages.length} Bilder herunterladen? Dies kann viele Browser-Popups auslösen!`)) {
+                alert('Der Download wird gestartet. Sie werden ggf. aufgefordert, den Speicherort zu wählen.');
+                
+                for (let i = 0; i < foundImages.length; i++) {
+                    const img = foundImages[i];
+                    
+                    // Erzeugt einen temporären Link und klickt darauf, um den Download zu starten
+                    const a = document.createElement('a');
+                    a.href = img.url;
+                    // Erzwingt den Download mit dem richtigen Dateinamen
+                    a.download = img.filename; 
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    
+                    // Kurze Pause, um den Browser nicht zu überlasten
+                    await new Promise(resolve => setTimeout(resolve, 500)); 
+                }
+            }
+        }
+    </script>
+</body>
+</html>
